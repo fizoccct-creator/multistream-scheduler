@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multistream Scheduler</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='9' fill='%23e5484d'/></svg>">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="dot" aria-hidden="true"></span>Multistream Scheduler</div>
+    <div class="top-right">
+      <nav class="tabs" aria-label="Sections">
+        <a href="#streams" data-tab="streams">Streams</a>
+        <a href="#settings" data-tab="settings">Settings <span id="settings-badge" class="badge" hidden></span></a>
+      </nav>
+      <button type="button" class="btn ghost small" id="logout" hidden>Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- STREAMS -->
+    <section id="view-streams" class="view">
+      <div class="layout">
+        <form id="new-job" class="card" autocomplete="off">
+          <h2>Schedule a stream</h2>
+
+          <label class="field">
+            <span class="label">Title</span>
+            <input name="title" required maxlength="100" placeholder="e.g. Friday night replay">
+          </label>
+
+          <label class="field">
+            <span class="label">Description <span class="muted">optional</span></span>
+            <textarea name="description" rows="2" maxlength="5000"></textarea>
+          </label>
+
+          <div class="field">
+            <span class="label">Video</span>
+            <div class="row">
+              <select name="video" id="video-select" required></select>
+              <label class="btn secondary">
+                Upload…
+                <input type="file" id="upload-input" accept="video/*,.mkv,.flv" hidden>
+              </label>
+            </div>
+            <div id="upload-progress" class="progress" hidden><div></div></div>
+            <div class="video-actions hint">
+              <button type="button" class="link" id="delete-video">Delete selected video</button>
+              <span id="local-folder-hint">Big files? <button type="button" class="link" id="open-videos">Open the videos folder</button> and copy them in.</span>
+              <span id="disk-hint"></span>
+            </div>
+          </div>
+
+          <label class="field">
+            <span class="label">Start time</span>
+            <input type="datetime-local" name="startAt" required>
+          </label>
+
+          <fieldset class="field">
+            <legend class="label">Go live on</legend>
+            <div id="platform-picks" class="picks"></div>
+          </fieldset>
+
+          <p id="form-error" class="error" hidden></p>
+          <button class="btn primary wide" type="submit">Schedule stream</button>
+        </form>
+
+        <div class="lists">
+          <h2 class="section-title">Upcoming &amp; live</h2>
+          <div id="jobs-upcoming" class="jobs"></div>
+          <h2 class="section-title">History</h2>
+          <div id="jobs-history" class="jobs"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view" hidden>
+      <div class="settings">
+        <form id="yt-form" class="card" autocomplete="off">
+          <div class="card-head">
+            <h2><span class="pf pf-youtube"></span>YouTube</h2>
+            <span id="yt-status" class="pill"></span>
+          </div>
+          <p class="muted">Goes live by itself. You connect once with a Google Cloud OAuth client (setup steps are in the README).</p>
+          <label class="field"><span class="label">Client ID</span><input name="clientId" placeholder="xxxx.apps.googleusercontent.com"></label>
+          <label class="field"><span class="label">Client secret</span><input name="clientSecret" type="password"></label>
+          <div class="field">
+            <span class="label">Authorized redirect URI <span class="muted">(paste this into Google Cloud)</span></span>
+            <div class="row"><input id="yt-redirect" readonly><button type="button" class="btn secondary" data-copy="#yt-redirect">Copy</button></div>
+          </div>
+          <label class="field">
+            <span class="label">Who can watch</span>
+            <select name="privacy">
+              <option value="public">Public</option>
+              <option value="unlisted">Unlisted</option>
+              <option value="private">Private</option>
+            </select>
+          </label>
+          <div class="actions">
+            <button class="btn secondary" type="submit">Save</button>
+            <button class="btn primary" type="button" id="yt-connect">Connect YouTube</button>
+            <button class="btn ghost" type="button" id="yt-disconnect" hidden>Disconnect</button>
+          </div>
+        </form>
+
+        <form id="fb-form" class="card" autocomplete="off">
+          <div class="card-head">
+            <h2><span class="pf pf-facebook"></span>Facebook Page</h2>
+            <span id="fb-status" class="pill"></span>
+          </div>
+          <p class="muted">Goes live by itself. You need your Page ID and a long-lived Page access token (setup steps are in the README).</p>
+          <label class="field"><span class="label">Page ID</span><input name="pageId" inputmode="numeric"></label>
+          <label class="field"><span class="label">Page access token</span><input name="pageToken" type="password"></label>
+          <div class="actions">
+            <button class="btn primary" type="submit">Save &amp; test</button>
+            <button class="btn ghost" type="button" id="fb-disconnect" hidden>Disconnect</button>
+          </div>
+        </form>
+
+        <form id="general-form" class="card" autocomplete="off">
+          <div class="card-head"><h2><span class="pf pf-instagram"></span>Instagram &amp; <span class="pf pf-tiktok"></span>TikTok</h2></div>
+          <p class="muted">These platforms give you a new stream key for every live, so the app reminds you before each stream to paste it in. The server URLs below are filled in for you each time.</p>
+          <label class="field"><span class="label">Instagram server URL</span><input name="instagramUrl" placeholder="rtmps://edgetee-upload-….fbcdn.net:443/rtmp/"></label>
+          <label class="field"><span class="label">TikTok server URL</span><input name="tiktokUrl" placeholder="rtmp://push-rtmp-….tiktokcdn.com/stage/"></label>
+
+          <div class="card-head sub"><h2>General</h2></div>
+          <div class="two">
+            <label class="field"><span class="label">Remind me (minutes before)</span><input name="reminderMinutes" type="number" min="1" max="180"></label>
+            <label class="field"><span class="label">Video bitrate (kbps)</span><input name="videoBitrateKbps" type="number" min="1000" max="9000" step="500"></label>
+          </div>
+          <p class="hint" id="bandwidth-hint"></p>
+          <div class="actions"><button class="btn primary" type="submit">Save</button></div>
+        </form>
+
+        <form id="notify-form" class="card" autocomplete="off">
+          <div class="card-head">
+            <h2>Phone notifications</h2>
+            <span id="notify-status" class="pill"></span>
+          </div>
+          <p class="muted">Get the "paste your stream key" reminder, plus started and finished alerts, on your phone. Install the free <strong>ntfy</strong> app (iPhone or Android), tap <strong>+</strong>, and subscribe to the topic below.</p>
+          <div class="field">
+            <span class="label">Topic <span class="muted">(acts like a password: anyone who knows it can read your alerts)</span></span>
+            <div class="row"><input name="ntfyTopic" maxlength="64" spellcheck="false"><button type="button" class="btn secondary" id="ntfy-generate">New random</button></div>
+          </div>
+          <label class="field"><span class="label">ntfy server</span><input name="ntfyServer" placeholder="https://ntfy.sh" spellcheck="false"></label>
+          <div class="actions">
+            <button class="btn primary" type="submit">Save</button>
+            <button class="btn secondary" type="button" id="ntfy-test">Send test</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
