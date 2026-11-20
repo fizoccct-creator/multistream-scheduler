@@ -1,0 +1,43 @@
+# Optional: builds the Mac and Windows desktop installers on GitHub's computers.
+# Not needed for the web version. Runs only when you push a tag like v1.0.1
+# (installers go on the Releases page) or click "Run workflow" in the Actions tab.
+name: Build desktop installers
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: --mac
+          - os: windows-latest
+            target: --win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build installer
+        run: npx electron-builder ${{ matrix.target }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ runner.os }}
+          path: |
+            dist/*.dmg
+            dist/*.exe
+          if-no-files-found: error
