@@ -1,6 +1,6 @@
-# Optional: builds the Mac and Windows desktop installers on GitHub's computers.
-# Not needed for the web version. Runs only when you push a tag like v1.0.1
-# (installers go on the Releases page) or click "Run workflow" in the Actions tab.
+# Builds the Mac and Windows desktop installers on GitHub's computers.
+# - Push a tag like v1.0.1 → builds both and publishes them on the Releases page.
+# - Or click "Run workflow" in the Actions tab → builds both (download them from the run's Artifacts).
 name: Build desktop installers
 
 on:
@@ -19,8 +19,10 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
+            file: dist/Multistream-Scheduler-Mac.dmg
           - os: windows-latest
             target: --win
+            file: dist/Multistream-Scheduler-Windows-Setup.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,14 +32,29 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Build installer
-        run: npx electron-builder ${{ matrix.target }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        run: npx electron-builder ${{ matrix.target }} --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4
         with:
           name: installer-${{ runner.os }}
-          path: |
-            dist/*.dmg
-            dist/*.exe
+          path: ${{ matrix.file }}
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" installers/* \
+            --title "Multistream Scheduler ${GITHUB_REF_NAME#v}" \
+            --notes-file .github/release-notes.md

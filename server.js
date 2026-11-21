@@ -467,7 +467,8 @@ export function startServer() {
 export { stopAll };
 
 // Running directly with `node server.js` (no desktop window).
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+if (process.argv[1] && samePath(path.resolve(process.argv[1]), fileURLToPath(import.meta.url))) {
   startServer().then(
     () => {
       console.log(`\n  Multistream Scheduler is running at ${BASE_URL}`);

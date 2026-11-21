@@ -4,6 +4,10 @@
   "version": "1.0.0",
   "private": true,
   "description": "Schedule a pre-recorded video to go live on YouTube, Facebook, Instagram and TikTok at the same time.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fizoccct-creator/multistream-scheduler.git"
+  },
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -52,7 +56,7 @@
       "identity": null
     },
     "dmg": {
-      "artifactName": "Multistream-Scheduler-${version}-mac-${arch}.${ext}"
+      "artifactName": "Multistream-Scheduler-Mac.${ext}"
     },
     "win": {
       "target": [
@@ -67,12 +71,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "Multistream-Scheduler-${version}-windows-setup.${ext}"
+      "artifactName": "Multistream-Scheduler-Windows-Setup.${ext}"
     },
-    "publish": {
-      "provider": "github",
-      "releaseType": "release"
-    },
+    "publish": null,
     "afterPack": "build/adhoc-sign.cjs"
   }
 }

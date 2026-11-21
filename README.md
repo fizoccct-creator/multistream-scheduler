@@ -1,54 +1,96 @@
 # Multistream Scheduler
 
-Schedule a pre-recorded video to go live on **YouTube, Facebook, Instagram and TikTok** at the same time. It runs on a free cloud server, so you use it from any browser, including your phone, and your own computer can be off.
+Schedule a pre-recorded video to go live on **YouTube, Facebook, Instagram and TikTok** at the same time, either straight from the video file or **through an OBS scene** with your overlays.
 
 | Platform | What you do |
 |---|---|
 | YouTube | Nothing. It goes live by itself. |
 | Facebook Page | Nothing. It goes live by itself. |
-| Instagram | Paste a new stream key before each stream (your phone reminds you). |
-| TikTok | Paste a new stream key before each stream (your phone reminds you). |
+| Instagram | Paste a new stream key before each stream (you get a reminder). |
+| TikTok | Paste a new stream key before each stream (you get a reminder). |
 
 Instagram and TikTok don't let outside apps start a live for you, and they give you a new key every time, so that one paste is the only manual step.
 
 ---
 
-## 1. Put it on a free cloud server (one time, about 30 minutes)
+## 1. Install: choose how to run it
+
+| | **Desktop app** (Mac or Windows) | **Cloud server** |
+|---|---|---|
+| Setup | Download and install, about 5 minutes | Rent or get a free server, about 30 minutes |
+| Your computer | Must stay on at stream time | Can be off |
+| OBS scenes and overlays | ✅ Yes | ❌ No (video file only) |
+| Use from your phone | Notifications only | ✅ Full dashboard |
+| Upload speed used | Your home internet | The server's |
+
+Most people should start with the **desktop app**.
+
+---
+
+## Option A: Desktop app for Windows and Mac
+
+### Download
+
+| Your computer | Download |
+|---|---|
+| **Windows** 10 or 11 (64-bit) | [**Multistream-Scheduler-Windows-Setup.exe**](https://github.com/fizoccct-creator/multistream-scheduler/releases/latest/download/Multistream-Scheduler-Windows-Setup.exe) |
+| **Mac** with Apple Silicon (M1 or newer) | [**Multistream-Scheduler-Mac.dmg**](https://github.com/fizoccct-creator/multistream-scheduler/releases/latest/download/Multistream-Scheduler-Mac.dmg) |
+
+These links always point to the newest version. All versions are on the [Releases page](https://github.com/fizoccct-creator/multistream-scheduler/releases). This repository is private, so you must be signed in to GitHub to download. FFmpeg is included, so you don't need to install anything else.
+
+### Install on Windows
+
+1. Run **Multistream-Scheduler-Windows-Setup.exe**.
+2. If you see **"Windows protected your PC"**, click **More info → Run anyway**. This appears because the installer isn't signed with a paid certificate.
+3. Follow the installer. You can choose where to install it. The app opens when it's done.
+4. If **Windows Firewall** asks about the app, choose **Private networks** only. The app only talks to your own PC and the streaming platforms.
+
+### Install on Mac
+
+1. Open **Multistream-Scheduler-Mac.dmg** and drag **Multistream Scheduler** into **Applications**.
+2. Open the app. macOS says it can't verify the developer: click **Done**. (The app isn't signed with a paid Apple developer account.)
+3. Go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway**, and confirm with your password.
+4. If macOS instead says the app "is damaged", run this once in Terminal, then open it again:
+   ```bash
+   xattr -cr "/Applications/Multistream Scheduler.app"
+   ```
+
+### While it runs (both systems)
+
+- **Closing the window doesn't quit the app.** It keeps running in the **system tray** (Windows, bottom-right) or **menu bar** (Mac, top-right), so scheduled streams still start. Click that icon to reopen the window or quit.
+- In the icon's menu, turn on **Start when I log in** so the app is always ready.
+- **The app keeps your computer awake while it's open.** Keep it plugged in. On a laptop, keep the lid open, because closing it still causes sleep.
+- **Upload speed:** sending to all 4 platforms at the default 4,500 kbps needs about **20 Mbps upload**. Lower the bitrate in Settings if your connection is slower.
+- The dashboard is also available in any browser on the same computer at `http://localhost:3030`.
+- **Each computer has its own settings and schedule.** If you install it on two computers, set up both, and don't schedule the same stream on both.
+
+Then set up notifications and connect your platforms (sections 2–5).
+
+---
+
+## Option B: Cloud server (your computer can be off)
 
 You need three things: a server, a web address, and this code on the server.
 
-### a) Get a free server (Oracle Cloud "Always Free")
-1. Sign up at <https://www.oracle.com/cloud/free/>. Oracle asks for a card to verify your identity, but "Always Free" resources are never charged.
-2. Go to **Compute → Instances → Create instance**:
-   - **Image:** Ubuntu 24.04
-   - **Shape:** Ampere `VM.Standard.A1.Flex` with 2 OCPUs and 12 GB memory (all free).
-   - **SSH keys:** download the private key it offers, or paste your own public key.
-   - Click **Create**, then copy the **Public IP address**.
-   - If it says "Out of capacity", try another Availability Domain or try again later. This is common.
-3. Open the web ports: on the instance page, click the **Subnet → Security List → Add Ingress Rules** and add two rules, each with source `0.0.0.0/0`, TCP, destination ports `80` and `443`.
-
-> Any other Ubuntu server works the same way, for example a €4/month VPS. Oracle's free tier includes 10 TB of outgoing data per month. Streaming to all 4 platforms uses about 8 GB per hour, so that's plenty.
+### a) Get a server
+- **Free:** Oracle Cloud "Always Free". Sign up at <https://www.oracle.com/cloud/free/>; Oracle asks for a card to verify you, but "Always Free" resources are never charged.
+  1. Go to **Compute → Instances → Create instance**. Choose the **Ubuntu 24.04** image and the Ampere `VM.Standard.A1.Flex` shape with 2 OCPUs and 12 GB memory, add an SSH key, and copy the **Public IP**.
+  2. If it says "Out of capacity", try another Availability Domain or try again later.
+  3. Open the web ports: on the instance page, click **Subnet → Security List → Add Ingress Rules**. Add TCP ports `80` and `443` from source `0.0.0.0/0`.
+- **Paid alternative:** any Ubuntu 22.04 or 24.04 server with 2 CPUs works the same way, for example Hetzner Cloud at about €6/month. Streaming to all 4 platforms uses about 8 GB of data per hour.
 
 ### b) Get a free web address (DuckDNS)
-1. Sign in at <https://www.duckdns.org>.
-2. Create a subdomain, for example `mystreams`, and set its **current ip** to your server's public IP.
-3. Your address is now `mystreams.duckdns.org`.
+Sign in at <https://www.duckdns.org>, create a subdomain (for example `mystreams`), and set its IP to your server's public IP. Your address is then `mystreams.duckdns.org`.
 
-### c) Install the app on the server
-Connect to the server from Terminal (Mac) or PowerShell (Windows):
-
-```bash
-ssh -i path/to/your-key ubuntu@YOUR.SERVER.IP
-```
-
-This repository is **private**, so the server has to sign in to GitHub once before it can download the code. On the server:
+### c) Install on the server
+Connect with `ssh -i path/to/your-key ubuntu@YOUR.SERVER.IP`. The repository is private, so sign in to GitHub on the server first:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y gh
 gh auth login
 ```
 
-Choose **GitHub.com → HTTPS → Login with a web browser**. It shows a short code: open <https://github.com/login/device> on your own computer or phone and enter it. Then:
+Choose **GitHub.com → HTTPS → Login with a web browser**, then enter the code shown at <https://github.com/login/device> on your phone or computer. Then:
 
 ```bash
 gh repo clone fizoccct-creator/multistream-scheduler
@@ -56,29 +98,23 @@ cd multistream-scheduler
 sudo bash deploy/setup.sh
 ```
 
-The script asks for your web address, your time zone and a login password. It then installs everything: FFmpeg, automatic HTTPS, and a background service that restarts by itself. When it finishes, open `https://mystreams.duckdns.org` and sign in.
+The script asks for your web address, your time zone and a login password. It then installs FFmpeg, automatic HTTPS, and a background service that restarts by itself. When it's done, open `https://mystreams.duckdns.org` and sign in.
 
-> Prefer not to sign in to GitHub on the server? Copy the folder from your computer instead: `scp -r multistream-scheduler ubuntu@YOUR.SERVER.IP:` and then run the same `cd` and `sudo bash` commands.
-
-**Updating later:** on the server, run `cd multistream-scheduler && git pull && sudo bash deploy/update.sh`.
+**Updating later:** run `cd multistream-scheduler && git pull && sudo bash deploy/update.sh`.
 
 ---
 
 ## 2. Phone notifications (recommended)
 
-Because the app runs on a server, reminders go to your phone through **ntfy**, a free app that needs no account.
+Reminders and alerts can go to your phone through **ntfy**, a free app that needs no account.
 1. Install **ntfy** from the App Store or Google Play.
-2. In the app's **Settings → Phone notifications**, click **New random**, then **Save**.
-3. In the ntfy phone app, tap **+** and subscribe to that same topic.
+2. In the app, open **Settings → Phone notifications**, click **New random**, then **Save**.
+3. In the ntfy phone app, tap **+** and subscribe to the same topic.
 4. Click **Send test**.
 
-You'll get the "paste your stream key" reminder 15 minutes before a stream (you can change the time in Settings), plus a notification when each stream starts and finishes. Tapping a notification opens the stream in your browser.
+You'll get the "paste your stream key" reminder 15 minutes before a stream (you can change the time in Settings), plus a notification when each stream starts and finishes. Keep the topic name private, because anyone who knows it can read your alerts. The desktop app also shows normal Windows or Mac notifications.
 
-Keep the topic name private, because anyone who knows it can read your alerts.
-
----
-
-## 3. Connect YouTube (one time)
+## 3. Connect YouTube (one time per computer or server)
 
 1. Go to <https://console.cloud.google.com> and create a project (any name).
 2. **APIs & Services → Library**: search for **YouTube Data API v3** and click **Enable**.
@@ -88,15 +124,19 @@ Keep the topic name private, because anyone who knows it can read your alerts.
    - Under **Test users** (sometimes called Audience), add the Google account that owns your YouTube channel.
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type: **Web application**
-   - **Authorized redirect URIs**: paste the URI shown in the app's Settings page, for example `https://mystreams.duckdns.org/auth/youtube/callback`.
-5. Copy the **Client ID** and **Client secret** into the app's Settings page, then click **Connect YouTube** and sign in.
+   - **Authorized redirect URIs**: paste the URI shown in the app's Settings page.
+     - Desktop app (Mac or Windows): `http://localhost:3030/auth/youtube/callback`
+     - Cloud server: `https://mystreams.duckdns.org/auth/youtube/callback`
+
+     You can add both to the same client.
+5. Copy the **Client ID** and **Client secret** into the app's Settings, then click **Connect YouTube**. Sign-in opens in your normal web browser.
 6. Your channel must have live streaming turned on. Check at <https://studio.youtube.com> → **Create → Go live**. The first time can take up to 24 hours to activate.
 
 > While the Google project is in "Testing" mode, Google may ask you to reconnect after 7 days. To avoid that, click **Publish app** on the consent screen. Because only you use it, you don't need Google's verification. Just click through the "unverified app" warning when you sign in.
 
 When you schedule a stream, the app creates the YouTube broadcast right away. It shows up as "Upcoming" on your channel, and the broadcast starts and ends by itself.
 
-## 4. Connect your Facebook Page (one time)
+## 4. Connect your Facebook Page (one time per computer or server)
 
 Facebook can only go live automatically on a **Page** (not a personal profile).
 
@@ -109,9 +149,9 @@ Facebook can only go live automatically on a **Page** (not a personal profile).
    - Open the **Access Token Debugger** (<https://developers.facebook.com/tools/debug/accesstoken>), paste the token, and click **Extend Access Token**. Copy the new token.
    - Back in Graph API Explorer, paste that long-lived token and run `GET me/accounts`.
    - Find your Page in the result. Copy its `id` (the **Page ID**) and its `access_token` (the **Page access token**). A Page token made this way does not expire.
-4. Paste both into the app's Settings page and click **Save & test**. You should see your Page's name.
+4. Paste both into the app's Settings and click **Save & test**. You should see your Page's name.
 
-> If Meta has renamed or changed a permission, the **Save & test** button shows Facebook's exact error message.
+You can reuse the same Page ID and token on another computer.
 
 ## 5. Instagram and TikTok (before each stream)
 
@@ -126,42 +166,41 @@ Facebook can only go live automatically on a **Page** (not a personal profile).
 2. Copy the **Server URL** and **Stream key** into the app and click **Save key**.
 3. Keep that page open. TikTok usually needs you to press **Go LIVE** there once the video is coming in.
 
-The app remembers the server URL you used last time, so next time you'll usually only need to paste the key.
+The app remembers the server URL you used last time, so next time you'll usually only need to paste the key. **If you don't paste a key in time**, that platform is skipped and the others go live as usual.
 
-**If you don't paste a key in time**, that platform is skipped and the others go live as usual.
+---
 
-## 6. Use it inside OBS Studio (optional, on your own computer)
+## 6. Use it inside OBS Studio (desktop app, Windows and Mac)
 
-Instead of sending the video file straight to the platforms, a scheduled stream can play **inside one of your OBS scenes**, so your logo, lower thirds and other overlays are included. The app shows up as a panel inside OBS.
+A scheduled stream can play **inside one of your OBS scenes**, so your logos, lower thirds and other overlays are included. OBS and the app must be on the **same computer**. The steps are the same on Windows and Mac.
 
-OBS mode needs the app running on the **same computer as OBS**, either as the desktop app or with `npm run server-only`. The cloud version can't control the OBS on your computer.
+### Set up once
+1. **Turn on OBS's WebSocket** (built into OBS 28 and newer): in OBS, open **Tools → WebSocket Server Settings**, tick **Enable WebSocket server**, click **Show Connect Info**, and copy the **Server Password**.
+2. **Connect the app:** go to **Settings → OBS Studio**, paste the password, and click **Connect & test**. It should show **Connected** and list your scenes.
+3. **Add the app as a panel inside OBS:** choose **Docks → Custom Browser Docks**, name it **Scheduler**, enter the URL **`http://localhost:3030`**, and click **Apply**. Drag the panel wherever you like.
+4. **Make a scene just for scheduled streams**, for example "Scheduled", with your logos and overlays but no camera. That way nothing can cover the video.
+5. **Set the keyframe interval:** go to **OBS → Settings → Output**, set Output Mode to **Advanced**, and under **Streaming** set **Keyframe Interval** to **2 s**. YouTube and Facebook expect this.
+6. **Check your bitrate:** the app sends your OBS stream 4 times, so a 4,500 kbps video bitrate needs about 20 Mbps of upload.
+7. Connect YouTube from your **normal web browser** at `http://localhost:3030`, not from inside OBS, because Google blocks sign-in inside apps.
 
-**Set up once:**
-1. In OBS, open **Tools → WebSocket Server Settings**, turn on **Enable WebSocket server**, then click **Show Connect Info** and copy the password. This is built into OBS 28 and newer.
-2. In the app, open **Settings → OBS Studio**, paste the password and click **Connect & test**. Your scenes appear.
-3. To get the panel inside OBS, choose **Docks → Custom Browser Docks**, name it "Scheduler", and enter `http://localhost:3030`. Drag the panel wherever you like.
-4. Connect YouTube from a normal browser tab at `http://localhost:3030`, not from inside OBS, because Google doesn't allow sign-in inside apps.
+### For each stream
+1. In the **Scheduler** panel, upload or pick the video, enter a title, set **Send with → OBS scene**, pick your scene, set the start time and platforms, then click **Schedule stream**.
+2. When reminded, paste the Instagram and TikTok keys (section 5).
+3. Keep **OBS and the app open**, and don't start a stream in OBS by hand around that time.
+4. **At the start time it's automatic:**
+   1. The video loads into a source called **"Scheduled video"** in your scene. It's created the first time and fills the screen behind your overlays; you can move or resize it, and your changes are kept.
+   2. OBS switches to that scene and starts streaming. The app first saves your own OBS stream settings.
+   3. The app copies OBS's stream to every platform without re-encoding.
+5. **When the video ends**, OBS stops streaming and **your own OBS stream settings are put back**. To end early, click **Stop stream** in the panel or **Stop Streaming** in OBS.
 
-**Schedule a stream:** under **Send with**, choose **OBS scene** and pick the scene. At the start time the app:
-1. Loads the video into a source called **"Scheduled video"** in that scene. It's created the first time and fills the screen behind your other sources. You can move or resize it in OBS, and your changes are kept.
-2. Switches OBS to that scene.
-3. Points OBS's stream at a private address on your computer and clicks **Start Streaming**. It saves your own stream settings first.
-4. Copies the stream to every platform without re-encoding, so quality and bitrate come from your OBS settings.
-5. When the video ends, stops streaming and **puts your own OBS stream settings back**.
-
-**Good to know:**
-- OBS must be open at the start time. If it isn't, the stream is marked **Failed** and you get a notification.
-- Don't stream from OBS by hand at the same time.
-- In **OBS → Settings → Output**, set the **Keyframe Interval** to **2 s**, because YouTube and Facebook expect it. Also make sure your **Video Bitrate** suits your upload speed: the app sends the same stream 4 times, so 4,500 kbps needs about 20 Mbps of upload.
-- **Stop stream** in the app, or **Stop Streaming** in OBS, both end the stream on every platform.
-- This is separate from the Aitum Multistream plugin. You can keep using that for your manual streams.
+**Note:** the stream has the shape of your OBS canvas. If your canvas is vertical (1080×1920), YouTube and Facebook get a vertical video too.
 
 ---
 
 ## Using the app
 
-1. **Upload** a video. It goes to the server, so a big file takes a while on a slow connection. The form shows how much space is left on the server.
-2. Enter a title, pick a start time (in your own time zone) and the platforms, then click **Schedule stream**.
+1. **Upload** a video, or pick one you uploaded before.
+2. Enter a title, pick a start time and the platforms, choose **Send with** (video file or OBS scene), then click **Schedule stream**.
 3. Paste the Instagram and TikTok keys when you're reminded.
 4. At the start time the stream goes out to every platform at once. You'll see progress, and you can **Stop stream** at any point.
 
@@ -169,44 +208,65 @@ Other buttons:
 - **Start now**: start a scheduled stream immediately (good for testing).
 - **Cancel**: cancel an upcoming stream. This also removes its YouTube broadcast.
 - **Show log**: see exactly what happened. Stream keys are hidden in the log.
-- **Delete selected video**: frees up space on the server.
+- **Delete selected video**: frees up disk space.
 
 If one platform drops out mid-stream, the others keep going, and that platform is marked **Problem**.
 
 ## Good to know
 
-- **Security.** The app is protected by your password, uses HTTPS, and locks sign-in for 15 minutes after 10 wrong passwords. You stay signed in on a device for 30 days. To change the password, run `sudo bash deploy/setup.sh` again.
-- **Video format.** Any common video file works. The app sends 30 fps H.264 video and AAC audio, with the longer side capped at 1920 px. Vertical videos stay vertical. If a video has no sound, silent audio is added because some platforms require an audio track.
-- **"Live" pre-recorded content.** Platforms may limit or flag pre-recorded videos shown as live. Check each platform's rules, and say in the title or description that it's a replay if you're unsure.
-- **Where things are stored on the server.** Settings, tokens and the schedule are in `/var/lib/multistream/data`, videos are in `/var/lib/multistream/videos`, and the server settings are in `/etc/multistream/env`. Instagram and TikTok keys are deleted after each stream.
-- **If the server was down at the start time**, the stream is marked **Missed** after 30 minutes. You can still click **Start now** on it.
+- **Where things are stored:**
+  - Windows: `%APPDATA%\Multistream Scheduler`
+  - Mac: `~/Library/Application Support/Multistream Scheduler`
+  - Cloud server: `/var/lib/multistream`
+
+  Settings and tokens are in `data/config.json`, the schedule in `data/jobs.json`, logs in `data/logs/`, and videos in `videos/`. On desktop, the tray or menu bar icon has **Open videos folder**. Instagram and TikTok keys are deleted after each stream.
+- **Video format (video-file mode).** Any common video file works. The app sends 30 fps H.264 video and AAC audio, with the longer side capped at 1920 px. Vertical videos stay vertical. If a video has no sound, silent audio is added because some platforms require it.
+- **"Live" pre-recorded content.** Platforms may limit or flag pre-recorded videos shown as live. Check each platform's rules, and say it's a replay in the title or description if you're unsure.
+- **If the app or OBS wasn't running at the start time**, the stream is marked **Missed** (app off for 30+ minutes) or **Failed** (OBS closed). You can click **Start now** on a missed stream.
+- **Cloud server security.** It's protected by your password and HTTPS, and sign-in locks for 15 minutes after 10 wrong passwords. To change the password, run `sudo bash deploy/setup.sh` again.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| The site doesn't load | Check that ports 80 and 443 are open in Oracle's Security List (step 1a), and that DuckDNS points to the right IP. On the server, run `sudo systemctl status multistream caddy`. |
-| Not sure what the app is doing | On the server, run `sudo journalctl -u multistream -f` to see the live log. |
+| Windows: "Windows protected your PC" | Click **More info → Run anyway**. |
+| Mac: "can't be opened" / "developer cannot be verified" | **System Settings → Privacy & Security → Open Anyway**. |
+| Mac: "is damaged and can't be opened" | Run `xattr -cr "/Applications/Multistream Scheduler.app"` in Terminal. |
+| "Port 3030 is already being used" | Another copy of the app (or another program) is running. Quit it from the tray or menu bar and reopen. |
+| The OBS panel is blank | Make sure the app is running, and that the dock URL is exactly `http://localhost:3030`. |
+| "Could not reach OBS" | OBS is closed, or **Tools → WebSocket Server Settings → Enable WebSocket server** is off. |
+| "Wrong OBS WebSocket password" | Copy it again from **Show Connect Info** in OBS. |
+| The video is hidden in OBS | Another source in the scene covers it. Use a dedicated scene, or move "Scheduled video" in the source list. |
 | YouTube: "The user is not enabled for live streaming" | Turn on live streaming in YouTube Studio and wait up to 24 hours. |
-| YouTube: "redirect_uri_mismatch" | The redirect URI in Google Cloud must match the one shown in Settings exactly, including `https://`. |
+| YouTube: "redirect_uri_mismatch" | Add the exact redirect URI shown in Settings to your Google OAuth client. |
 | YouTube: "Google did not return a refresh token" | Remove the app at <https://myaccount.google.com/permissions> and connect again. |
-| Facebook error about permissions | Generate the token again with all four permissions listed in step 4. |
-| Facebook: "version is no longer supported" | Change `v24.0` near the top of `lib/facebook.js` to a newer version, then update the server. |
+| Facebook error about permissions | Generate the token again with all four permissions listed in section 4. |
+| Facebook: "version is no longer supported" | Change `v24.0` near the top of `lib/facebook.js` to a newer version. |
 | Instagram or TikTok shows **Problem** | The key probably expired or was used already. Get a fresh one next time. |
-| Stream stutters | Lower the video bitrate in Settings, or stream to fewer platforms. |
-| Times are off by some hours | Run `sudo bash deploy/setup.sh` again and enter the correct time zone. |
+| Stream stutters | Lower the bitrate (in Settings, or in OBS for OBS mode), or stream to fewer platforms. |
+| Cloud: the site doesn't load | Check ports 80 and 443 are open (Option B, step a) and DuckDNS points to the right IP. Then run `sudo systemctl status multistream caddy`. |
 
 ---
 
 ## For developers
 
-Run it on your own computer (no password needed on localhost):
-
 ```bash
-npm run server-only   # then open http://localhost:3030 (needs FFmpeg on PATH)
+npm install
+npm start              # run the desktop app from source
+npm run server-only    # run only the server, then open http://localhost:3030 (needs FFmpeg on PATH)
+npm run dist:mac       # build the Mac installer into dist/
+npm run dist:win       # build the Windows installer (best built on Windows or by GitHub Actions)
 ```
 
-These settings are read from environment variables (`deploy/setup.sh` writes them to `/etc/multistream/env`):
+**Publishing a new version with installers:**
+1. Change `"version"` in `package.json`, for example to `1.0.1`, and commit.
+2. Create and push a matching tag:
+   ```bash
+   git tag v1.0.1 && git push origin main --tags
+   ```
+3. GitHub Actions builds the Windows and Mac installers (about 10–15 minutes) and publishes them on the Releases page. The download links at the top of this README then point to the new version automatically.
+
+**Server settings** (environment variables; `deploy/setup.sh` writes them to `/etc/multistream/env`):
 
 | Variable | Meaning |
 |---|---|
@@ -216,4 +276,4 @@ These settings are read from environment variables (`deploy/setup.sh` writes the
 | `TZ` | Time zone used in reminders and logs. |
 | `MS_DATA_DIR`, `MS_VIDEOS_DIR` | Where data and videos are stored. |
 
-**Optional desktop version.** The same code also runs as a Mac or Windows desktop app (`npm start` from source, or `npm run dist:mac`). Pushing a tag like `v1.0.1` makes GitHub Actions build both installers and publish them on the Releases page. The bundled FFmpeg comes from the [`ffmpeg-static`](https://www.npmjs.com/package/ffmpeg-static) package and is GPL-licensed.
+The bundled FFmpeg in the desktop app comes from the [`ffmpeg-static`](https://www.npmjs.com/package/ffmpeg-static) package and is GPL-licensed.
