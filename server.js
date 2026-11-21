@@ -11,6 +11,7 @@ import { authEnabled, isSignedIn, login, logout } from './lib/auth.js';
 import { ROOT, VIDEOS_DIR, getConfig, updateConfig, listJobs, getJob, addJob, updateJob, removeJob, newId } from './lib/store.js';
 import * as youtube from './lib/youtube.js';
 import * as facebook from './lib/facebook.js';
+import * as obs from './lib/obs.js';
 import { probe, getProgress, stopAll } from './lib/streamer.js';
 import {
   startScheduler, prepareYouTube, startJob, stopJob, cancelJob, readLog, logFileFor, log,
@@ -105,6 +106,15 @@ function publicState() {
       redirectUri: YT_REDIRECT,
     },
     facebook: { connected: facebook.isConnected(), pageId: c.facebook.pageId, pageName: c.facebook.pageName },
+    obs: {
+      available: !HOSTED, // OBS mode needs OBS on the same computer as this app
+      configured: obs.isConfigured(),
+      url: c.obs.url || 'ws://127.0.0.1:4455',
+      hasPassword: Boolean(c.obs.password),
+      version: c.obs.version,
+      scenes: c.obs.scenes,
+      lastScene: c.obs.lastScene,
+    },
     general: c.general,
     videos: listVideos(),
     jobs: listJobs().map(publicJob),
@@ -151,6 +161,15 @@ async function createJob(req, res) {
   const info = await probe(file).catch((err) => { throw new HttpError(400, err.message); });
   if (!info.hasVideo) throw new HttpError(400, 'That file has no video track.');
 
+  const source = b.source === 'obs' ? 'obs' : 'file';
+  const obsScene = String(b.obsScene || '').trim();
+  if (source === 'obs') {
+    if (HOSTED) throw new HttpError(400, 'OBS mode only works when the app runs on the same computer as OBS.');
+    if (!obs.isConfigured()) throw new HttpError(400, 'Connect OBS in Settings first.');
+    if (!obsScene) throw new HttpError(400, 'Pick the OBS scene to play the video in.');
+    updateConfig('obs', { lastScene: obsScene });
+  }
+
   const platformStatus = {};
   if (platforms.youtube) platformStatus.youtube = { state: 'pending', message: 'Creating the YouTube broadcast…' };
   if (platforms.facebook) platformStatus.facebook = { state: 'ready', message: 'Goes live by itself at the start time.' };
@@ -164,6 +183,8 @@ async function createJob(req, res) {
     description: String(b.description || '').trim(),
     video,
     durationSec: info.duration,
+    source,
+    obsScene: source === 'obs' ? obsScene : undefined,
     startAt: new Date(start).toISOString(),
     platforms,
     platformStatus,
@@ -239,6 +260,26 @@ async function handleApi(req, res, url) {
       instagramUrl: typeof b.instagramUrl === 'string' ? b.instagramUrl.trim() : g.instagramUrl,
       tiktokUrl: typeof b.tiktokUrl === 'string' ? b.tiktokUrl.trim() : g.tiktokUrl,
     });
+    return send(res, 200, { ok: true });
+  }
+  if (method === 'POST' && pathname === '/api/settings/obs') {
+    if (HOSTED) throw new HttpError(400, 'OBS mode only works when the app runs on the same computer as OBS.');
+    const b = await readJson(req);
+    const url = String(b.url || 'ws://127.0.0.1:4455').trim();
+    if (!/^wss?:\/\//.test(url)) throw new HttpError(400, 'The address should start with ws://');
+    const password = typeof b.password === 'string' && b.password ? b.password : getConfig().obs.password;
+    const info = await obs.getInfo({ url, password }).catch((err) => { throw new HttpError(400, err.message); });
+    updateConfig('obs', { url, password, version: info.version, scenes: info.scenes });
+    return send(res, 200, { ok: true, ...info });
+  }
+  if (method === 'POST' && pathname === '/api/obs/refresh') {
+    if (!obs.isConfigured()) throw new HttpError(400, 'Connect OBS in Settings first.');
+    const info = await obs.getInfo().catch((err) => { throw new HttpError(400, err.message); });
+    updateConfig('obs', { version: info.version, scenes: info.scenes });
+    return send(res, 200, { ok: true, ...info });
+  }
+  if (method === 'POST' && pathname === '/api/settings/obs/disconnect') {
+    updateConfig('obs', { url: '', password: '', version: '', scenes: [] });
     return send(res, 200, { ok: true });
   }
   if (method === 'POST' && pathname === '/api/settings/notifications') {

@@ -131,7 +131,53 @@ function renderVideos() {
   $('#local-folder-hint').hidden = state.hosted;
   $('#disk-hint').textContent = state.disk ? `${fmtSize(state.disk.free)} free on ${state.hosted ? 'the server' : 'this computer'}.` : '';
   $('#logout').hidden = !state.authEnabled;
+  renderSource();
 }
+
+/* ---------- OBS ---------- */
+function renderSource() {
+  const o = state.obs;
+  $('#source-field').hidden = !(o.available && o.configured);
+  $('#obs-form').hidden = !o.available;
+  const form = $('#new-job');
+  const useObs = o.configured && form.source.value === 'obs';
+  $('#obs-scene-row').hidden = !useObs;
+  $('#source-hint').textContent = useObs
+    ? 'At the start time, OBS plays the video in a "Scheduled video" source in this scene (your overlays stay on top), goes live, and stops when the video ends. OBS must be open.'
+    : 'The app plays the video and sends it straight to each platform. OBS isn\'t needed.';
+  const sel = $('#obs-scene-select');
+  const current = sel.value || o.lastScene;
+  const options = o.scenes.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if (sel.dataset.options !== options) {
+    sel.innerHTML = options || '<option value="">No scenes. Click Refresh</option>';
+    sel.dataset.options = options;
+  }
+  if (o.scenes.includes(current)) sel.value = current;
+}
+for (const r of document.querySelectorAll('input[name="source"]')) r.addEventListener('change', renderSource);
+$('#obs-refresh').addEventListener('click', async () => {
+  try {
+    await api('POST', '/api/obs/refresh');
+    toast('Scenes updated');
+    await refresh();
+  } catch (ex) { toast(ex.message, true); }
+});
+$('#obs-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const btn = f.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const r = await api('POST', '/api/settings/obs', { url: f.url.value, password: f.password.value });
+    toast(`Connected to OBS ${r.version}. Found ${r.scenes.length} scene${r.scenes.length === 1 ? '' : 's'}.`);
+    await refresh(true, true);
+  } catch (ex) { toast(ex.message, true); } finally { btn.disabled = false; }
+});
+$('#obs-disconnect').addEventListener('click', async () => {
+  if (!confirm('Disconnect OBS?')) return;
+  await api('POST', '/api/settings/obs/disconnect').catch((ex) => toast(ex.message, true));
+  await refresh(true, true);
+});
 
 $('#upload-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
@@ -197,6 +243,8 @@ $('#new-job').addEventListener('submit', async (e) => {
       video: form.video.value,
       startAt: new Date(form.startAt.value).toISOString(),
       platforms,
+      source: form.source.value,
+      obsScene: form.obsScene.value,
     });
     form.title.value = '';
     form.description.value = '';
@@ -262,7 +310,7 @@ function jobCard(job) {
     <div class="job-head">
       <div>
         <p class="job-title">${esc(job.title)}</p>
-        <div class="job-meta"><strong>${formatWhen(job.startAt)}</strong> · ${relative(job.startAt)} · ${esc(job.video)}${job.durationSec ? ` (${fmtDuration(job.durationSec)})` : ''}</div>
+        <div class="job-meta"><strong>${formatWhen(job.startAt)}</strong> · ${relative(job.startAt)} · ${esc(job.video)}${job.durationSec ? ` (${fmtDuration(job.durationSec)})` : ''}${job.source === 'obs' ? ` · via OBS scene “${esc(job.obsScene)}”` : ''}</div>
       </div>
       <span class="pill ${cls}">${label}</span>
     </div>
@@ -372,6 +420,11 @@ function fillSettings() {
   g.reminderMinutes.value = state.general.reminderMinutes;
   g.videoBitrateKbps.value = state.general.videoBitrateKbps;
   updateBandwidthHint();
+  const of = $('#obs-form');
+  of.url.value = state.obs.url;
+  of.password.value = '';
+  of.password.placeholder = state.obs.hasPassword ? 'Saved. Paste to replace' : '';
+  $('#dock-url').textContent = location.origin;
   const n = $('#notify-form');
   n.ntfyTopic.value = state.general.ntfyTopic || '';
   n.ntfyServer.value = state.general.ntfyServer || 'https://ntfy.sh';
@@ -388,6 +441,10 @@ function renderSettingsStatus() {
   fbPill.className = `pill ${state.facebook.connected ? 'ok' : 'warn'}`;
   fbPill.textContent = state.facebook.connected ? `Connected${state.facebook.pageName ? `: ${state.facebook.pageName}` : ''}` : 'Not connected';
   $('#fb-disconnect').hidden = !state.facebook.connected;
+  const oPill = $('#obs-status');
+  oPill.className = `pill ${state.obs.configured ? 'ok' : ''}`;
+  oPill.textContent = state.obs.configured ? `Connected${state.obs.version ? `: OBS ${state.obs.version}` : ''}` : 'Not connected';
+  $('#obs-disconnect').hidden = !state.obs.configured;
   const nPill = $('#notify-status');
   nPill.className = `pill ${state.general.ntfyTopic ? 'ok' : 'warn'}`;
   nPill.textContent = state.general.ntfyTopic ? 'On' : 'Off';

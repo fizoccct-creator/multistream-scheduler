@@ -130,6 +130,32 @@ The app remembers the server URL you used last time, so next time you'll usually
 
 **If you don't paste a key in time**, that platform is skipped and the others go live as usual.
 
+## 6. Use it inside OBS Studio (optional, on your own computer)
+
+Instead of sending the video file straight to the platforms, a scheduled stream can play **inside one of your OBS scenes**, so your logo, lower thirds and other overlays are included. The app shows up as a panel inside OBS.
+
+OBS mode needs the app running on the **same computer as OBS**, either as the desktop app or with `npm run server-only`. The cloud version can't control the OBS on your computer.
+
+**Set up once:**
+1. In OBS, open **Tools → WebSocket Server Settings**, turn on **Enable WebSocket server**, then click **Show Connect Info** and copy the password. This is built into OBS 28 and newer.
+2. In the app, open **Settings → OBS Studio**, paste the password and click **Connect & test**. Your scenes appear.
+3. To get the panel inside OBS, choose **Docks → Custom Browser Docks**, name it "Scheduler", and enter `http://localhost:3030`. Drag the panel wherever you like.
+4. Connect YouTube from a normal browser tab at `http://localhost:3030`, not from inside OBS, because Google doesn't allow sign-in inside apps.
+
+**Schedule a stream:** under **Send with**, choose **OBS scene** and pick the scene. At the start time the app:
+1. Loads the video into a source called **"Scheduled video"** in that scene. It's created the first time and fills the screen behind your other sources. You can move or resize it in OBS, and your changes are kept.
+2. Switches OBS to that scene.
+3. Points OBS's stream at a private address on your computer and clicks **Start Streaming**. It saves your own stream settings first.
+4. Copies the stream to every platform without re-encoding, so quality and bitrate come from your OBS settings.
+5. When the video ends, stops streaming and **puts your own OBS stream settings back**.
+
+**Good to know:**
+- OBS must be open at the start time. If it isn't, the stream is marked **Failed** and you get a notification.
+- Don't stream from OBS by hand at the same time.
+- In **OBS → Settings → Output**, set the **Keyframe Interval** to **2 s**, because YouTube and Facebook expect it. Also make sure your **Video Bitrate** suits your upload speed: the app sends the same stream 4 times, so 4,500 kbps needs about 20 Mbps of upload.
+- **Stop stream** in the app, or **Stop Streaming** in OBS, both end the stream on every platform.
+- This is separate from the Aitum Multistream plugin. You can keep using that for your manual streams.
+
 ---
 
 ## Using the app

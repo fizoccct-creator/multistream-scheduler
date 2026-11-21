@@ -53,6 +53,19 @@
             </div>
           </div>
 
+          <fieldset class="field" id="source-field" hidden>
+            <legend class="label">Send with</legend>
+            <div class="seg" role="radiogroup">
+              <label><input type="radio" name="source" value="file" checked><span>Video file</span></label>
+              <label><input type="radio" name="source" value="obs"><span>OBS scene</span></label>
+            </div>
+            <div id="obs-scene-row" class="row" hidden>
+              <select name="obsScene" id="obs-scene-select" aria-label="OBS scene"></select>
+              <button type="button" class="btn secondary" id="obs-refresh" title="Reload scenes from OBS">Refresh</button>
+            </div>
+            <p class="hint" id="source-hint">The app plays the video and sends it straight to each platform.</p>
+          </fieldset>
+
           <label class="field">
             <span class="label">Start time</span>
             <input type="datetime-local" name="startAt" required>
@@ -133,6 +146,21 @@
           </div>
           <p class="hint" id="bandwidth-hint"></p>
           <div class="actions"><button class="btn primary" type="submit">Save</button></div>
+        </form>
+
+        <form id="obs-form" class="card" autocomplete="off" hidden>
+          <div class="card-head">
+            <h2><span class="pf pf-obs"></span>OBS Studio</h2>
+            <span id="obs-status" class="pill"></span>
+          </div>
+          <p class="muted">Lets a scheduled stream play inside one of your OBS scenes, so your overlays and logos are included. In OBS, open <strong>Tools → WebSocket Server Settings</strong>, turn on <strong>Enable WebSocket server</strong>, then click <strong>Show Connect Info</strong> to see the password.</p>
+          <label class="field"><span class="label">WebSocket address</span><input name="url" placeholder="ws://127.0.0.1:4455" spellcheck="false"></label>
+          <label class="field"><span class="label">WebSocket password</span><input name="password" type="password"></label>
+          <div class="actions">
+            <button class="btn primary" type="submit">Connect &amp; test</button>
+            <button class="btn ghost" type="button" id="obs-disconnect" hidden>Disconnect</button>
+          </div>
+          <p class="hint"><strong>Use this app as a panel in OBS:</strong> in OBS, choose <strong>Docks → Custom Browser Docks</strong>, name it "Scheduler" and enter <code id="dock-url">http://localhost:3030</code>.</p>
         </form>
 
         <form id="notify-form" class="card" autocomplete="off">
