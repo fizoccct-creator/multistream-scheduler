@@ -26,9 +26,14 @@
         <form id="new-job" class="card" autocomplete="off">
           <h2>Schedule a stream</h2>
 
+          <fieldset class="field">
+            <legend class="label">Profile</legend>
+            <div class="seg profile-seg" id="profile-picks" role="radiogroup"></div>
+          </fieldset>
+
           <label class="field">
             <span class="label">Title</span>
-            <input name="title" required maxlength="100" placeholder="e.g. Friday night replay">
+            <input name="title" required maxlength="100" placeholder="e.g. Episode 12">
           </label>
 
           <label class="field">
@@ -63,7 +68,7 @@
               <select name="obsScene" id="obs-scene-select" aria-label="OBS scene"></select>
               <button type="button" class="btn secondary" id="obs-refresh" title="Reload scenes from OBS">Refresh</button>
             </div>
-            <p class="hint" id="source-hint">The app plays the video and sends it straight to each platform.</p>
+            <p class="hint" id="source-hint"></p>
           </fieldset>
 
           <label class="field">
@@ -76,11 +81,13 @@
             <div id="platform-picks" class="picks"></div>
           </fieldset>
 
+          <p class="hint">Streams can't overlap. The app blocks a time that clashes with another profile's stream.</p>
           <p id="form-error" class="error" hidden></p>
           <button class="btn primary wide" type="submit">Schedule stream</button>
         </form>
 
         <div class="lists">
+          <div class="chips" id="profile-filter" role="radiogroup" aria-label="Show streams for"></div>
           <h2 class="section-title">Upcoming &amp; live</h2>
           <div id="jobs-upcoming" class="jobs"></div>
           <h2 class="section-title">History</h2>
@@ -92,59 +99,89 @@
     <!-- SETTINGS -->
     <section id="view-settings" class="view" hidden>
       <div class="settings">
+
+        <!-- Profiles -->
+        <div class="card span-all" id="profiles-card">
+          <div class="card-head">
+            <h2>Profiles</h2>
+            <button type="button" class="btn secondary small" id="profile-add">+ Add profile</button>
+          </div>
+          <p class="muted">Each profile has its own YouTube channel, Facebook Page and Instagram key. Pick the profile when you schedule a stream.</p>
+          <div class="profile-tabs" id="profile-tabs" role="tablist"></div>
+
+          <div class="profile-panel">
+            <form id="profile-name-form" class="row profile-name" autocomplete="off">
+              <input name="name" maxlength="24" aria-label="Profile name">
+              <button class="btn secondary" type="submit">Rename</button>
+              <button class="btn ghost" type="button" id="profile-delete">Delete profile</button>
+            </form>
+
+            <div class="profile-grid">
+              <div class="subcard" id="p-yt">
+                <div class="card-head">
+                  <h3><span class="pf pf-youtube"></span>YouTube</h3>
+                  <span class="pill" data-status></span>
+                </div>
+                <p class="hint">Goes live by itself. Sign in with this profile's Google account.</p>
+                <label class="field">
+                  <span class="label">Who can watch</span>
+                  <select name="privacy" id="p-yt-privacy">
+                    <option value="public">Public</option>
+                    <option value="unlisted">Unlisted</option>
+                    <option value="private">Private</option>
+                  </select>
+                </label>
+                <div class="actions">
+                  <button class="btn primary" type="button" id="p-yt-connect">Connect YouTube</button>
+                  <button class="btn ghost" type="button" id="p-yt-disconnect" hidden>Disconnect</button>
+                </div>
+                <p class="hint" id="p-yt-client-hint" hidden>Save the Google OAuth client below first.</p>
+              </div>
+
+              <form class="subcard" id="p-fb" autocomplete="off">
+                <div class="card-head">
+                  <h3><span class="pf pf-facebook"></span>Facebook Page</h3>
+                  <span class="pill" data-status></span>
+                </div>
+                <p class="hint">Goes live by itself on this profile's Page.</p>
+                <label class="field"><span class="label">Page ID</span><input name="pageId" inputmode="numeric"></label>
+                <label class="field"><span class="label">Page access token</span><input name="pageToken" type="password"></label>
+                <div class="actions">
+                  <button class="btn primary" type="submit">Save &amp; test</button>
+                  <button class="btn ghost" type="button" id="p-fb-disconnect" hidden>Disconnect</button>
+                </div>
+              </form>
+
+              <form class="subcard" id="p-ig" autocomplete="off">
+                <div class="card-head">
+                  <h3><span class="pf pf-instagram"></span>Instagram</h3>
+                  <span class="pill" data-status></span>
+                </div>
+                <p class="hint">Save the stream key once and every stream for this profile uses it automatically.</p>
+                <label class="field"><span class="label">Server URL</span><input name="url" placeholder="rtmps://edgetee-upload-….fbcdn.net:443/rtmp/" spellcheck="false"></label>
+                <label class="field"><span class="label">Stream key</span><input name="key" type="password" spellcheck="false"></label>
+                <div class="actions">
+                  <button class="btn primary" type="submit">Save key</button>
+                  <button class="btn ghost" type="button" id="p-ig-clear" hidden>Remove key</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Google OAuth client (shared) -->
         <form id="yt-form" class="card" autocomplete="off">
           <div class="card-head">
-            <h2><span class="pf pf-youtube"></span>YouTube</h2>
-            <span id="yt-status" class="pill"></span>
+            <h2><span class="pf pf-youtube"></span>Google OAuth client</h2>
+            <span id="yt-client-status" class="pill"></span>
           </div>
-          <p class="muted">Goes live by itself. You connect once with a Google Cloud OAuth client (setup steps are in the README).</p>
+          <p class="muted">One Google Cloud OAuth client works for every profile's YouTube channel (setup steps are in the README).</p>
           <label class="field"><span class="label">Client ID</span><input name="clientId" placeholder="xxxx.apps.googleusercontent.com"></label>
           <label class="field"><span class="label">Client secret</span><input name="clientSecret" type="password"></label>
           <div class="field">
             <span class="label">Authorized redirect URI <span class="muted">(paste this into Google Cloud)</span></span>
             <div class="row"><input id="yt-redirect" readonly><button type="button" class="btn secondary" data-copy="#yt-redirect">Copy</button></div>
           </div>
-          <label class="field">
-            <span class="label">Who can watch</span>
-            <select name="privacy">
-              <option value="public">Public</option>
-              <option value="unlisted">Unlisted</option>
-              <option value="private">Private</option>
-            </select>
-          </label>
-          <div class="actions">
-            <button class="btn secondary" type="submit">Save</button>
-            <button class="btn primary" type="button" id="yt-connect">Connect YouTube</button>
-            <button class="btn ghost" type="button" id="yt-disconnect" hidden>Disconnect</button>
-          </div>
-        </form>
-
-        <form id="fb-form" class="card" autocomplete="off">
-          <div class="card-head">
-            <h2><span class="pf pf-facebook"></span>Facebook Page</h2>
-            <span id="fb-status" class="pill"></span>
-          </div>
-          <p class="muted">Goes live by itself. You need your Page ID and a long-lived Page access token (setup steps are in the README).</p>
-          <label class="field"><span class="label">Page ID</span><input name="pageId" inputmode="numeric"></label>
-          <label class="field"><span class="label">Page access token</span><input name="pageToken" type="password"></label>
-          <div class="actions">
-            <button class="btn primary" type="submit">Save &amp; test</button>
-            <button class="btn ghost" type="button" id="fb-disconnect" hidden>Disconnect</button>
-          </div>
-        </form>
-
-        <form id="general-form" class="card" autocomplete="off">
-          <div class="card-head"><h2><span class="pf pf-instagram"></span>Instagram &amp; <span class="pf pf-tiktok"></span>TikTok</h2></div>
-          <p class="muted">These platforms give you a new stream key for every live, so the app reminds you before each stream to paste it in. The server URLs below are filled in for you each time.</p>
-          <label class="field"><span class="label">Instagram server URL</span><input name="instagramUrl" placeholder="rtmps://edgetee-upload-….fbcdn.net:443/rtmp/"></label>
-          <label class="field"><span class="label">TikTok server URL</span><input name="tiktokUrl" placeholder="rtmp://push-rtmp-….tiktokcdn.com/stage/"></label>
-
-          <div class="card-head sub"><h2>General</h2></div>
-          <div class="two">
-            <label class="field"><span class="label">Remind me (minutes before)</span><input name="reminderMinutes" type="number" min="1" max="180"></label>
-            <label class="field"><span class="label">Video bitrate (kbps)</span><input name="videoBitrateKbps" type="number" min="1000" max="9000" step="500"></label>
-          </div>
-          <p class="hint" id="bandwidth-hint"></p>
           <div class="actions"><button class="btn primary" type="submit">Save</button></div>
         </form>
 
@@ -168,7 +205,7 @@
             <h2>Phone notifications</h2>
             <span id="notify-status" class="pill"></span>
           </div>
-          <p class="muted">Get the "paste your stream key" reminder, plus started and finished alerts, on your phone. Install the free <strong>ntfy</strong> app (iPhone or Android), tap <strong>+</strong>, and subscribe to the topic below.</p>
+          <p class="muted">Get reminders plus started and finished alerts on your phone. Install the free <strong>ntfy</strong> app (iPhone or Android), tap <strong>+</strong>, and subscribe to the topic below.</p>
           <div class="field">
             <span class="label">Topic <span class="muted">(acts like a password: anyone who knows it can read your alerts)</span></span>
             <div class="row"><input name="ntfyTopic" maxlength="64" spellcheck="false"><button type="button" class="btn secondary" id="ntfy-generate">New random</button></div>
@@ -178,6 +215,21 @@
             <button class="btn primary" type="submit">Save</button>
             <button class="btn secondary" type="button" id="ntfy-test">Send test</button>
           </div>
+        </form>
+
+        <form id="general-form" class="card" autocomplete="off">
+          <div class="card-head"><h2>General</h2></div>
+          <div class="two">
+            <label class="field"><span class="label">Remind me (minutes before)</span><input name="reminderMinutes" type="number" min="1" max="180"></label>
+            <label class="field"><span class="label">Video bitrate (kbps)</span><input name="videoBitrateKbps" type="number" min="1000" max="9000" step="500"></label>
+          </div>
+          <p class="hint" id="bandwidth-hint"></p>
+          <label class="switch">
+            <input type="checkbox" name="showTiktok">
+            <span><b>Show TikTok</b><small>Off while testing. TikTok needs a new key pasted for every stream.</small></span>
+          </label>
+          <label class="field" id="tiktok-url-field"><span class="label">TikTok server URL</span><input name="tiktokUrl" placeholder="rtmp://push-rtmp-….tiktokcdn.com/stage/"></label>
+          <div class="actions"><button class="btn primary" type="submit">Save</button></div>
         </form>
       </div>
     </section>

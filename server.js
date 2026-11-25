@@ -8,14 +8,17 @@ import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { openFolder, notify } from './lib/notify.js';
 import { authEnabled, isSignedIn, login, logout } from './lib/auth.js';
-import { ROOT, VIDEOS_DIR, getConfig, updateConfig, listJobs, getJob, addJob, updateJob, removeJob, newId } from './lib/store.js';
+import {
+  ROOT, VIDEOS_DIR, getConfig, updateConfig, listJobs, getJob, addJob, updateJob, removeJob, newId,
+  listProfiles, getProfile, profileFor, updateProfile, addProfile, removeProfile,
+} from './lib/store.js';
 import * as youtube from './lib/youtube.js';
 import * as facebook from './lib/facebook.js';
 import * as obs from './lib/obs.js';
 import { probe, getProgress, stopAll } from './lib/streamer.js';
 import {
   startScheduler, prepareYouTube, startJob, stopJob, cancelJob, readLog, logFileFor, log,
-  PLATFORMS, MANUAL_PLATFORMS,
+  PLATFORMS, MANUAL_PLATFORMS, keyFor, findOverlap,
 } from './lib/scheduler.js';
 
 const PORT = Number(process.env.PORT) || 3030;
@@ -31,7 +34,7 @@ const YT_REDIRECT = `${BASE_URL}/auth/youtube/callback`;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const VIDEO_EXT = new Set(['.mp4', '.mov', '.m4v', '.mkv', '.webm', '.flv', '.avi']);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
-const oauthStates = new Set();
+const oauthStates = new Map(); // sign-in state -> profile id
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -77,8 +80,23 @@ function publicJob(job) {
     const k = job.keys?.[p];
     keys[p] = { saved: Boolean(k?.key), url: k?.url || '' };
   }
+  const k = keyFor(job, 'instagram');
+  keys.instagram.usesProfileKey = k?.source === 'profile';
   const { ingestUrl, ...yt } = job.youtube || {};
-  return { ...job, keys, youtube: job.youtube ? yt : undefined, progress: getProgress(job.id) };
+  return { ...job, profileId: profileFor(job).id, keys, youtube: job.youtube ? yt : undefined, progress: getProgress(job.id) };
+}
+
+// Profile settings for the browser, without tokens or keys.
+function publicProfile(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    obsScene: p.obsScene,
+    youtube: { connected: youtube.isConnected(p), channelTitle: p.youtube.channelTitle, privacy: p.youtube.privacy },
+    facebook: { connected: facebook.isConnected(p), pageId: p.facebook.pageId, pageName: p.facebook.pageName },
+    instagram: { url: p.instagram.url, hasKey: Boolean(p.instagram.url && p.instagram.key) },
+  };
 }
 
 function diskSpace() {
@@ -97,15 +115,8 @@ function publicState() {
     hosted: HOSTED,
     authEnabled: authEnabled(),
     disk: diskSpace(),
-    youtube: {
-      clientId: c.youtube.clientId,
-      hasSecret: Boolean(c.youtube.clientSecret),
-      connected: youtube.isConnected(),
-      channelTitle: c.youtube.channelTitle,
-      privacy: c.youtube.privacy,
-      redirectUri: YT_REDIRECT,
-    },
-    facebook: { connected: facebook.isConnected(), pageId: c.facebook.pageId, pageName: c.facebook.pageName },
+    youtubeClient: { clientId: c.youtube.clientId, hasSecret: Boolean(c.youtube.clientSecret), redirectUri: YT_REDIRECT },
+    profiles: listProfiles().map(publicProfile),
     obs: {
       available: !HOSTED, // OBS mode needs OBS on the same computer as this app
       configured: obs.isConfigured(),
@@ -152,14 +163,23 @@ async function createJob(req, res) {
   if (Number.isNaN(start)) throw new HttpError(400, 'Pick a start time.');
   if (start < Date.now() - 60000) throw new HttpError(400, 'That start time has already passed.');
 
+  const profile = getProfile(String(b.profileId || ''));
+  if (!profile) throw new HttpError(400, 'Pick a profile.');
   const platforms = {};
   for (const p of PLATFORMS) platforms[p] = Boolean(b.platforms?.[p]);
+  if (!getConfig().general.showTiktok) platforms.tiktok = false;
   if (!Object.values(platforms).some(Boolean)) throw new HttpError(400, 'Pick at least one platform.');
-  if (platforms.youtube && !youtube.isConnected()) throw new HttpError(400, 'Connect YouTube in Settings first, or untick it.');
-  if (platforms.facebook && !facebook.isConnected()) throw new HttpError(400, 'Connect Facebook in Settings first, or untick it.');
+  if (platforms.youtube && !youtube.isConnected(profile)) throw new HttpError(400, `Connect ${profile.name}'s YouTube in Settings first, or untick it.`);
+  if (platforms.facebook && !facebook.isConnected(profile)) throw new HttpError(400, `Connect ${profile.name}'s Facebook Page in Settings first, or untick it.`);
 
   const info = await probe(file).catch((err) => { throw new HttpError(400, err.message); });
   if (!info.hasVideo) throw new HttpError(400, 'That file has no video track.');
+
+  const clash = findOverlap({ startAt: new Date(start).toISOString(), durationSec: info.duration });
+  if (clash) {
+    const when = new Date(clash.startAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    throw new HttpError(409, `This overlaps “${clash.title}” (${profileFor(clash).name}, ${when}). Streams can't run at the same time; pick another time.`);
+  }
 
   const source = b.source === 'obs' ? 'obs' : 'file';
   const obsScene = String(b.obsScene || '').trim();
@@ -168,17 +188,23 @@ async function createJob(req, res) {
     if (!obs.isConfigured()) throw new HttpError(400, 'Connect OBS in Settings first.');
     if (!obsScene) throw new HttpError(400, 'Pick the OBS scene to play the video in.');
     updateConfig('obs', { lastScene: obsScene });
+    updateProfile(profile.id, { obsScene }); // remember this profile's scene for next time
   }
 
   const platformStatus = {};
   if (platforms.youtube) platformStatus.youtube = { state: 'pending', message: 'Creating the YouTube broadcast…' };
   if (platforms.facebook) platformStatus.facebook = { state: 'ready', message: 'Goes live by itself at the start time.' };
-  for (const p of MANUAL_PLATFORMS) {
-    if (platforms[p]) platformStatus[p] = { state: 'needs-key', message: 'Paste the stream key before the start time.' };
+  const savedIg = profile.instagram.url && profile.instagram.key;
+  if (platforms.instagram) {
+    platformStatus.instagram = savedIg
+      ? { state: 'ready', message: `Uses ${profile.name}'s saved stream key.` }
+      : { state: 'needs-key', message: `Paste the stream key, or save one for ${profile.name} in Settings.` };
   }
+  if (platforms.tiktok) platformStatus.tiktok = { state: 'needs-key', message: 'Paste the stream key before the start time.' };
 
   const job = addJob({
     id: newId(),
+    profileId: profile.id,
     title,
     description: String(b.description || '').trim(),
     video,
@@ -193,7 +219,7 @@ async function createJob(req, res) {
     reminded: false,
     createdAt: new Date().toISOString(),
   });
-  log(job.id, `Scheduled for ${new Date(start).toLocaleString()} with ${video}.`);
+  log(job.id, `Scheduled for ${profile.name} at ${new Date(start).toLocaleString()} with ${video}.`);
   if (platforms.youtube) await prepareYouTube(job.id);
   send(res, 201, publicJob(getJob(job.id)));
 }
@@ -209,9 +235,9 @@ async function saveKey(req, res, job) {
   if (!key) throw new HttpError(400, 'Paste the stream key.');
   updateJob(job.id, (j) => ({
     keys: { ...j.keys, [platform]: { url, key } },
-    platformStatus: { ...j.platformStatus, [platform]: { state: 'ready', message: 'Stream key saved.' } },
+    platformStatus: { ...j.platformStatus, [platform]: { state: 'ready', message: 'Stream key saved for this stream only.' } },
   }));
-  updateConfig('general', { [`${platform}Url`]: url }); // remember the server URL for next time
+  if (platform === 'tiktok') updateConfig('general', { tiktokUrl: url }); // remember the server URL for next time
   log(job.id, `${platform} stream key saved.`);
   send(res, 200, publicJob(getJob(job.id)));
 }
@@ -224,31 +250,79 @@ async function handleApi(req, res, url) {
 
   if (method === 'GET' && pathname === '/api/state') return send(res, 200, publicState());
 
+  // Shared Google OAuth client (one Google Cloud project works for every profile's channel).
   if (method === 'POST' && pathname === '/api/settings/youtube') {
     const b = await readJson(req);
     const patch = {};
     if (typeof b.clientId === 'string') patch.clientId = b.clientId.trim();
     if (b.clientSecret) patch.clientSecret = String(b.clientSecret).trim();
-    if (['public', 'unlisted', 'private'].includes(b.privacy)) patch.privacy = b.privacy;
     updateConfig('youtube', patch);
     return send(res, 200, { ok: true });
   }
-  if (method === 'POST' && pathname === '/api/settings/youtube/disconnect') {
-    youtube.disconnect();
-    return send(res, 200, { ok: true });
-  }
-  if (method === 'POST' && pathname === '/api/settings/facebook') {
+
+  // ---- Profiles (YGC, BYP, ...) ----
+  if (method === 'POST' && pathname === '/api/profiles') {
     const b = await readJson(req);
-    const pageId = String(b.pageId || '').trim();
-    const pageToken = String(b.pageToken || '').trim() || getConfig().facebook.pageToken;
-    if (!pageId || !pageToken) throw new HttpError(400, 'Enter both the Page ID and the Page access token.');
-    const page = await facebook.verify(pageId, pageToken).catch((err) => { throw new HttpError(400, err.message); });
-    updateConfig('facebook', { pageId, pageToken, pageName: page.name || '' });
-    return send(res, 200, { ok: true, pageName: page.name });
+    const name = String(b.name || '').trim().slice(0, 24);
+    if (!name) throw new HttpError(400, 'Give the profile a name.');
+    if (listProfiles().some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new HttpError(400, 'A profile with that name already exists.');
+    if (listProfiles().length >= 6) throw new HttpError(400, 'You can have up to 6 profiles.');
+    return send(res, 201, publicProfile(addProfile(name)));
   }
-  if (method === 'POST' && pathname === '/api/settings/facebook/disconnect') {
-    updateConfig('facebook', { pageId: '', pageToken: '', pageName: '' });
-    return send(res, 200, { ok: true });
+  const pm = pathname.match(/^\/api\/profiles\/([a-f0-9]+)(?:\/(youtube\/disconnect|facebook|facebook\/disconnect|instagram|instagram\/clear))?$/);
+  if (pm) {
+    const profile = getProfile(pm[1]);
+    if (!profile) throw new HttpError(404, 'Profile not found.');
+    const action = pm[2];
+    if (method === 'DELETE' && !action) {
+      if (listProfiles().length <= 1) throw new HttpError(400, 'You need at least one profile.');
+      const busy = listJobs().some((j) => profileFor(j).id === profile.id && ['scheduled', 'starting', 'live', 'missed'].includes(j.status));
+      if (busy) throw new HttpError(409, `${profile.name} has upcoming streams. Cancel or delete them first.`);
+      removeProfile(profile.id);
+      return send(res, 200, { ok: true });
+    }
+    if (method !== 'POST') throw new HttpError(404, 'Not found.');
+    const b = action === 'youtube/disconnect' || action === 'facebook/disconnect' || action === 'instagram/clear' ? {} : await readJson(req);
+    if (!action) {
+      const patch = {};
+      if (typeof b.name === 'string') {
+        const name = b.name.trim().slice(0, 24);
+        if (!name) throw new HttpError(400, 'Give the profile a name.');
+        if (listProfiles().some((p) => p.id !== profile.id && p.name.toLowerCase() === name.toLowerCase())) throw new HttpError(400, 'A profile with that name already exists.');
+        patch.name = name;
+      }
+      if (['public', 'unlisted', 'private'].includes(b.youtubePrivacy)) patch.youtube = { privacy: b.youtubePrivacy };
+      updateProfile(profile.id, patch);
+      return send(res, 200, publicProfile(profile));
+    }
+    if (action === 'youtube/disconnect') {
+      youtube.disconnect(profile);
+      return send(res, 200, { ok: true });
+    }
+    if (action === 'facebook') {
+      const pageId = String(b.pageId || '').trim();
+      const pageToken = String(b.pageToken || '').trim() || profile.facebook.pageToken;
+      if (!pageId || !pageToken) throw new HttpError(400, 'Enter both the Page ID and the Page access token.');
+      const page = await facebook.verify(pageId, pageToken).catch((err) => { throw new HttpError(400, err.message); });
+      updateProfile(profile.id, { facebook: { pageId, pageToken, pageName: page.name || '' } });
+      return send(res, 200, { ok: true, pageName: page.name });
+    }
+    if (action === 'facebook/disconnect') {
+      updateProfile(profile.id, { facebook: { pageId: '', pageToken: '', pageName: '' } });
+      return send(res, 200, { ok: true });
+    }
+    if (action === 'instagram') {
+      const url = String(b.url || '').trim();
+      const key = String(b.key || '').trim() || profile.instagram.key;
+      if (!/^rtmps?:\/\//i.test(url)) throw new HttpError(400, 'The server URL should start with rtmp:// or rtmps://');
+      if (!key) throw new HttpError(400, 'Paste the stream key.');
+      updateProfile(profile.id, { instagram: { url, key } });
+      return send(res, 200, { ok: true });
+    }
+    if (action === 'instagram/clear') {
+      updateProfile(profile.id, { instagram: { url: '', key: '' } });
+      return send(res, 200, { ok: true });
+    }
   }
   if (method === 'POST' && pathname === '/api/settings/general') {
     const b = await readJson(req);
@@ -257,7 +331,7 @@ async function handleApi(req, res, url) {
     updateConfig('general', {
       reminderMinutes: clamp(b.reminderMinutes, 1, 180, g.reminderMinutes),
       videoBitrateKbps: clamp(b.videoBitrateKbps, 1000, 9000, g.videoBitrateKbps),
-      instagramUrl: typeof b.instagramUrl === 'string' ? b.instagramUrl.trim() : g.instagramUrl,
+      showTiktok: typeof b.showTiktok === 'boolean' ? b.showTiktok : g.showTiktok,
       tiktokUrl: typeof b.tiktokUrl === 'string' ? b.tiktokUrl.trim() : g.tiktokUrl,
     });
     return send(res, 200, { ok: true });
@@ -415,18 +489,21 @@ async function handler(req, res) {
     if (url.pathname === '/auth/youtube') {
       const { clientId, clientSecret } = getConfig().youtube;
       if (!clientId || !clientSecret) return resultPage(res, false, 'YouTube could not connect', 'Save your Google Client ID and secret in Settings first.');
+      const profile = getProfile(url.searchParams.get('profile') || '');
+      if (!profile) return resultPage(res, false, 'YouTube could not connect', 'Choose a profile in Settings and click Connect YouTube again.');
       const state = crypto.randomBytes(16).toString('hex');
-      oauthStates.add(state);
+      oauthStates.set(state, profile.id);
       return redirect(res, youtube.authUrl(YT_REDIRECT, state));
     }
     if (url.pathname === '/auth/youtube/callback') {
       // Google sign-in happens in your normal web browser, so show a simple "done" page there.
       const state = url.searchParams.get('state');
       try {
-        if (!state || !oauthStates.delete(state)) throw new Error('Sign-in expired. Please try again.');
+        const profile = getProfile(oauthStates.get(state) || '');
+        if (!state || !oauthStates.delete(state) || !profile) throw new Error('Sign-in expired. Please try again.');
         if (url.searchParams.get('error')) throw new Error(`Google: ${url.searchParams.get('error')}`);
-        await youtube.exchangeCode(url.searchParams.get('code'), YT_REDIRECT);
-        return resultPage(res, true, 'YouTube is connected', 'You can close this tab and go back to Multistream Scheduler.');
+        await youtube.exchangeCode(profile, url.searchParams.get('code'), YT_REDIRECT);
+        return resultPage(res, true, `YouTube is connected for ${profile.name}`, 'You can close this tab and go back to Multistream Scheduler.');
       } catch (err) {
         return resultPage(res, false, 'YouTube could not connect', err.message);
       }

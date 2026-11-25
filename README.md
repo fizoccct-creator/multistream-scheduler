@@ -6,10 +6,10 @@ Schedule a pre-recorded video to go live on **YouTube, Facebook, Instagram and T
 |---|---|
 | YouTube | Nothing. It goes live by itself. |
 | Facebook Page | Nothing. It goes live by itself. |
-| Instagram | Paste a new stream key before each stream (you get a reminder). |
-| TikTok | Paste a new stream key before each stream (you get a reminder). |
+| Instagram | Nothing, once you save the profile's stream key in Settings. Without a saved key, you paste one per stream (you get a reminder). |
+| TikTok | Hidden for now (turn it on in **Settings → General → Show TikTok**). It needs a new key pasted for every stream. |
 
-Instagram and TikTok don't let outside apps start a live for you, and they give you a new key every time, so that one paste is the only manual step.
+**Profiles:** one app handles several brands or podcasts, for example **YGC** and **BYP**. Each profile has its own YouTube channel, Facebook Page and Instagram key. You pick the profile when you schedule. Streams never overlap: the app blocks a time that clashes with any other stream.
 
 ---
 
@@ -64,7 +64,7 @@ These links always point to the newest version. All versions are on the [Release
 - The dashboard is also available in any browser on the same computer at `http://localhost:3030`.
 - **Each computer has its own settings and schedule.** If you install it on two computers, set up both, and don't schedule the same stream on both.
 
-Then set up notifications and connect your platforms (sections 2–5).
+Then set up notifications and connect your platforms (sections 2–5). Settings for the YGC and BYP profiles are in **Settings → Profiles**.
 
 ---
 
@@ -114,7 +114,16 @@ Reminders and alerts can go to your phone through **ntfy**, a free app that need
 
 You'll get the "paste your stream key" reminder 15 minutes before a stream (you can change the time in Settings), plus a notification when each stream starts and finishes. Keep the topic name private, because anyone who knows it can read your alerts. The desktop app also shows normal Windows or Mac notifications.
 
-## 3. Connect YouTube (one time per computer or server)
+## Profiles (YGC, BYP and more)
+
+- **Settings → Profiles** shows a tab for each profile. YGC and BYP are created for you. Use **+ Add profile** for another podcast or brand (up to 6), and **Rename** or **Delete profile** to change them.
+- Each profile tab has its own **YouTube**, **Facebook Page** and **Instagram** cards. Set them up once per profile (sections 3–5).
+- When you schedule, choose the profile at the top of the form. Each stream card shows a colored profile tag.
+- The chips above the stream list (**All profiles**, **YGC**, **BYP**) filter what you see.
+- **Streams can't overlap**, even across profiles: there's one internet connection and one OBS. The app keeps at least 2 minutes between streams and tells you which stream clashes.
+- A profile can't be deleted while it has upcoming streams.
+
+## 3. Connect YouTube (one time per profile)
 
 1. Go to <https://console.cloud.google.com> and create a project (any name).
 2. **APIs & Services → Library**: search for **YouTube Data API v3** and click **Enable**.
@@ -129,14 +138,15 @@ You'll get the "paste your stream key" reminder 15 minutes before a stream (you 
      - Cloud server: `https://mystreams.duckdns.org/auth/youtube/callback`
 
      You can add both to the same client.
-5. Copy the **Client ID** and **Client secret** into the app's Settings, then click **Connect YouTube**. Sign-in opens in your normal web browser.
-6. Your channel must have live streaming turned on. Check at <https://studio.youtube.com> → **Create → Go live**. The first time can take up to 24 hours to activate.
+5. Copy the **Client ID** and **Client secret** into **Settings → Google OAuth client** and click **Save**. This one client works for every profile.
+6. Go to **Settings → Profiles**, pick the profile (YGC or BYP), and click **Connect YouTube** in its YouTube card. Sign-in opens in your normal web browser: sign in with **that profile's** Google account or channel. Repeat for each profile.
+7. Each channel must have live streaming turned on. Check at <https://studio.youtube.com> → **Create → Go live**. The first time can take up to 24 hours to activate.
 
 > While the Google project is in "Testing" mode, Google may ask you to reconnect after 7 days. To avoid that, click **Publish app** on the consent screen. Because only you use it, you don't need Google's verification. Just click through the "unverified app" warning when you sign in.
 
 When you schedule a stream, the app creates the YouTube broadcast right away. It shows up as "Upcoming" on your channel, and the broadcast starts and ends by itself.
 
-## 4. Connect your Facebook Page (one time per computer or server)
+## 4. Connect your Facebook Page (one time per profile)
 
 Facebook can only go live automatically on a **Page** (not a personal profile).
 
@@ -149,17 +159,22 @@ Facebook can only go live automatically on a **Page** (not a personal profile).
    - Open the **Access Token Debugger** (<https://developers.facebook.com/tools/debug/accesstoken>), paste the token, and click **Extend Access Token**. Copy the new token.
    - Back in Graph API Explorer, paste that long-lived token and run `GET me/accounts`.
    - Find your Page in the result. Copy its `id` (the **Page ID**) and its `access_token` (the **Page access token**). A Page token made this way does not expire.
-4. Paste both into the app's Settings and click **Save & test**. You should see your Page's name.
+4. In **Settings → Profiles**, pick the profile, paste both into its **Facebook Page** card and click **Save & test**. You should see the Page's name.
 
-You can reuse the same Page ID and token on another computer.
+Do this for each profile's Page (for example the YGC Page and the BYP Page). You can reuse the same Page ID and token on another computer.
 
-## 5. Instagram and TikTok (before each stream)
+## 5. Instagram (saved key) and TikTok
 
-**Instagram** (some accounts may need to be Professional or Creator accounts):
-1. On a computer, go to <https://www.instagram.com>, click **Create (+) → Live video**.
-2. Enter a title and choose who can watch. Instagram shows a **Stream URL** and a **Stream key**.
-3. Paste them into the stream's card in the app and click **Save key**.
-4. **Leave the Instagram tab open.** When your video starts arriving, Instagram may also need you to click **Go live** there. This depends on your account.
+**Instagram: save the key once per profile**
+1. Get the profile's Instagram **Server URL** and **Stream key** (on instagram.com: **Create (+) → Live video**; some accounts need to be Professional or Creator accounts).
+2. In **Settings → Profiles**, pick the profile, paste both into its **Instagram** card and click **Save key**.
+3. From then on, every stream for that profile uses the saved key automatically, with no reminder or paste needed. The key stays saved after each stream.
+4. To use a different key for one stream only, click **Use a different key for this stream** on that stream's card. The saved key isn't changed.
+5. If Instagram ever gives you a new key, paste it in the same card to replace it, or click **Remove key**.
+
+If a profile has no saved key, you can still paste a key on each stream; you'll get a reminder before it starts. Depending on your account, Instagram may also need you to click **Go live** in its own window once the video arrives.
+
+**TikTok** is hidden for now. Turn it on in **Settings → General → Show TikTok** (it needs TikTok's LIVE access with a stream key, which not every account has):
 
 **TikTok** (needs TikTok's LIVE access with a stream key, which not every account has):
 1. Go to TikTok **LIVE Producer** (on tiktok.com, click **LIVE** or open the Creator tools) and set up a live.
